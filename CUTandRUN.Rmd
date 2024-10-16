@@ -1,0 +1,569 @@
+---
+title: "Cut&Run analysis"
+author: ""
+date: "`r format(Sys.time(), '%B %d , %Y')`"
+output: 
+    html_document:
+        toc: TRUE
+        toc_float: FALSE
+        toc_depth: 2
+        toc_collapsed: FALSE
+        theme: lumen
+        number_sections: FALSE
+        coding_folding: hide
+        code_download: FALSE
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: sentence
+params:
+  dat.dir: "/fh/fast/_SR/Genomics/user/fwu/project/YvonneFondufe_VAI/20241007_LH00740_0008_B22TNF7LT3"
+---
+
+```{r setup, include=FALSE, dev='CairoPNG'}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning=FALSE, dev="CairoPNG")
+knitr::opts_knit$set(root.dir = params$dat.dir)
+
+options(stringsAsFactors = F)
+options(scipen = 99)
+library(Cairo)
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+library(kableExtra)
+
+fq.dir <- paste(params$dat.dir, 'Unaligned/', sep = '/')
+dst.dir <- paste(params$dat.dir, 'Analysis', sep = '/')
+
+wd <- params$dat.dir
+setwd(wd)
+
+```
+
+```{r read_qc}
+## read precomputed data
+dat <- readRDS('qc/data.rds')
+ss <- read.csv('samples.csv')
+meta <- read.csv('qc/read_metrics.csv')
+
+figs <- readRDS('qc/figs.rds')
+
+## initiate variables
+targets <- sort(setdiff(unique(meta$target), c('IgG', 'Input'))) # targets to make QC plots
+tab.width <- 12
+tab.read.height <- max(length(unique(ss$sample_group))*1 + 2,6)
+tab.peak.height <- max(length(unique(ss$sample_group))*1.3 + 2,8)
+tab.height2 <- length(targets) + 1
+tab.height3 <- length(targets) * 2.5
+
+```
+
+```{r make_tabs, include=FALSE}
+# Function to create multiple tabs
+make_tabs <- function(title, contents){
+  cat(title, "\n\n")
+  for (cnt in contents){print(cnt); cat("\n")}
+  cat("\n\n")
+}
+```
+
+## Summary
+
+This document describes the data analysis of auto Cut & Run experiments.
+
+$$\\[0.5in]$$
+
+## Sample sheet
+
+```{r sample_sheet}
+
+ss %>% 
+  mutate(
+    sample_id = group
+  ) %>% 
+  select(c(sample_id, sample_group, target, sample_replicate, control)) %>%
+  arrange(sample_group, target, sample_replicate) %>% 
+  unique.data.frame() %>% 
+  DT::datatable(
+  class = 'cell-border stripe', 
+  rownames = T,  
+  filter = 'top', 
+  editable = F, 
+  extensions = 'Buttons', 
+  options = list(
+    pageLength = 6, 
+    dom = 'Bfrtip',
+    buttons = c('csv')
+  ))
+
+```
+
+$$\\[0.5in]$$
+
+
+## QC reads {.tabset .tabset-pills}
+
+### Plots {.tabset .tabset-pills}
+**A. Sequenced reads** - number of paired reads after adapter trimming and passed to alignment.
+
+**B. Reads aligned to target genome** - number of reads aligned to the target genome.
+
+**C. Alignment rate to target genome** - fraction of reads aligned to the target genome.
+
+**D. Reads aligned to E. coli genome** - number of reads aligned to E. coli genome.
+
+**E. Duplication rate** - fraction of duplicated reads.
+
+**F. Estimated library size** - estimated number of fragments in a library given the duplication rate.
+
+**G. Fragment length** - fragment length estimated based on paired-end sequencing.  
+
+```{r read_plots, results='asis', fig.width=tab.width, fig.height=tab.read.height}
+qc_read <- c("seq_depth", "aligned_reads", "aligned_pct", "aligned_reads_spikein", "dup_rate", "est_lib_size", "frag_lens_dens")
+
+## targeted proteins
+for (tgt in targets){
+  p1 <- wrap_plots(
+    c(lapply(figs[qc_read], function(x){x[[tgt]]}), list(guide_area())), 
+    ncol = 3, guides = 'collect')+
+    plot_annotation(tag_levels = 'A')+
+    plot_layout(design = c(
+      area(1,1,4,9), area(1,11,4,19), area(1,21,4,29), 
+      area(6,1,9,9), area(6,11,9,19), area(6,21,9,29), 
+      area(11,1,19,9), area(11,11,19,19)
+      ))
+  
+  cat("\n\n")
+  cat("####", tgt, "\n\n")
+  print(p1)
+  cat("\n\n")
+  
+}
+
+
+```
+
+```{r igg_plots, eval=TRUE, results='asis', fig.width=tab.width, fig.height=tab.read.height}
+## IgG
+p1 <- wrap_plots(
+  c(lapply(figs[qc_read[1:6]], function(x){x$IgG}), list(guide_area())),
+  ncol = 3, guides = "collect")+
+    plot_annotation(tag_levels = 'A')+
+  plot_layout(design = c(
+    area(1,1,4,9), area(1,11,4,19), area(1,21,4,29), 
+    area(6,1,9,9), area(6,11,9,19), area(6,21,9,29), 
+    area(11,1,13,9)
+    ))
+  cat("\n\n")
+cat("####", "IgG", "\n\n")
+print(p1)
+cat("\n\n")
+
+```
+
+
+### Metrics
+```{r}
+meta %>% 
+  mutate(
+    sample_id = group,
+    bt2_total_aligned_Ecoli = bt2_total_aligned_spikein,
+    Ecoli_alignment_rate = bt2_total_aligned_spikein/bt2_total_reads_spikein,
+  ) %>% 
+  arrange(sample_group, target, sample_replicate) %>% 
+  dplyr::select(sample_id, sample_group, target, sample_replicate, bt2_total_reads_target, bt2_total_aligned_target, target_alignment_rate, bt2_total_aligned_Ecoli, Ecoli_alignment_rate, dedup_percent_duplication, dedup_estimated_library_size) %>% 
+  unique.data.frame() %>% 
+  DT::datatable(
+  class = 'cell-border stripe', 
+  rownames = T,  
+  filter = 'top', 
+  editable = F, 
+  extensions = 'Buttons', 
+  options = list(
+    pageLength = 6, 
+    dom = 'Bfrtip',
+    buttons = c('csv')
+  )) %>% 
+  DT::formatRound(columns=c('target_alignment_rate', 'Ecoli_alignment_rate', 'dedup_percent_duplication'), digits=4)
+
+```
+
+##  {.unlisted .unnumbered}
+
+$$\\[0.5in]$$
+
+## QC peaks {.tabset .tabset-pills}
+
+### Individual samples {.tabset .tabset-pills}
+**A. Peaks from each sample** - number of peaks called from each library.
+For each peak caller, both target-only peaks and target-against-IgG peaks were called and common peaks (shown as solid dots and referred to as filtered peaks) were retained for further analysis.
+
+**B. Fraction of reads in peak** - fraction of paired-end reads in filtered peaks.
+
+**C. Peak width** - peak width distribution of the filtered set.
+The upper bound of x-axis was limited to the maximum 3rd quantile of datasets.
+
+
+$$\\[0.1in]$$
+
+```{r peak_plots, results='asis', fig.width=tab.width, fig.height=tab.peak.height}
+qc_peak <- c("count_peaks", "peak_frip", "peak_width")
+
+for (tgt in targets){
+  p2 <- wrap_plots(
+    c(lapply(figs[qc_peak], function(x){x[[tgt]]}), list(guide_area())), 
+    guides = 'collect')+
+    plot_annotation(tag_levels = 'A')+
+    plot_layout(design = c(
+      area(1,1,9,19), area(1,21,9,29), 
+      area(11,1,19,19), area(11,21,19,29)
+      ))
+  
+  cat("\n\n")
+  cat("####", tgt, "\n\n")
+  print(p2)
+  cat("\n\n")
+  
+}
+
+
+```
+
+
+### Consensus peaks {.tabset .tabset-pills}
+
+For each target, peaks from all conditions were pooled, and overlapping peaks were merged into a set of consensus peaks across conditions.\
+
+$$\\[0.1in]$$
+
+#### Peak count
+
+```{r conp_count}
+data.table::rbindlist(lapply(
+  split(dat$nconps, dat$nconps$target),
+  function(x){
+    data.frame(
+      target = x$target[1],
+      MACS2_narrow_peaks = ifelse('MACS2narrow' %in% x$caller, x$nconp[x$caller == 'MACS2narrow'], NA),
+      MACS2_broad_peaks = ifelse('MACS2broad' %in% x$caller, x$nconp[x$caller == 'MACS2broad'], NA),
+      SEACR_peaks = ifelse('SEACR' %in% x$caller, x$nconp[x$caller == 'SEACR'], NA)
+    )
+  }
+)) %>% 
+  kable %>%
+  kable_styling("striped", full_width = F) %>%
+  scroll_box(width = "700px", height = "200px")
+
+```
+
+#### Genomic distribution
+
+```{r sonp_distribution, fig.width=10, fig.height=6}
+qc <- 'conp_ann'
+p <- wrap_plots(lapply(
+  paste(rep(unique(gsub('.narrow_peaks|.broad_peaks|.strigent', '', names(figs[[qc]]))), each=3), c('stringent','narrow_peaks','broad_peaks'), sep = '.'),
+  function(id){
+    if(id %in% names(figs[[qc]])){
+      figs[[qc]][[id]]
+    }else{
+      plot_spacer()
+    }
+  }), ncol = 3)
+print(p)
+```
+
+#### Compare sample groups
+
+Plot distribution of consensus peaks in each sample group.\
+*shared* = peaks contributed by at least 2 sample groups.\
+*unique* = unqiue to the sample group
+.\
+
+```{r fig.width=9, fig.height=5}
+wrap_plots(figs$rep2conp, ncol = 3)
+
+```
+
+#### MACS2 vs SEACR
+
+Compare consensus peaks generated by MACS2 and SEACR.\
+
+```{r fig.width=8, fig.height=8}
+wrap_plots(figs$seacr2macs[!sapply(figs$seacr2macs, is.null)], ncol = 2)
+
+```
+
+
+
+
+##  {.unlisted .unnumbered}
+
+$$\\[0.5in]$$
+
+## Delivered files
+
+### Fastq files
+
+`r fq.dir`
+
+$$\\[0.2in]$$
+
+### [Analysis results](./)
+
+`r dst.dir` contains the following folders and files.
+
+$$\\[0.1in]$$
+
+#### [01_prealign/](./01_prealign/)
+
+FastQC output of raw fastq and adapter-trimmed fastq, which is described at <https://www.bioinformatics.babraham.ac.uk/projects/fastqc/>
+
+$$\\[0.1in]$$
+
+#### [02_alignments/bowtie2/target/](./02_alignments/bowtie2/target/)
+
+*sample_name.target.markdup.bam* -- read alignment to hg38 genome with duplicated reads marked
+
+*sample_name.target.dedup.bam* -- read alignment to hg38 genome with duplicated reads removed
+
+$$\\[0.1in]$$
+
+#### [03_peak_calling/](./03_peak_calling/)
+
+-   MACS2/
+
+MACS2 peaks called with all IgG reads
+
+*sample_name.noControl.narrow_peaks.narrowPeak -- target-only narrow peaks*
+
+*sample_name.toIgG.narrow_peaks.narrowPeak* -- IgG-controlled narrow peaks
+
+sample_name*.toIgG.narrow_peaks.**filtered**.narrowPeak -- IgG-controlled narrow peaks that overlap with target -only narrow peaks*
+
+*sample_name .noControl.broad_peaks.broadPeak* -- target-only broad peaks
+
+sample_name*.toIgG. broad_peaks.broadPeak -- IgG-controlled broad peaks*
+
+*sample_name.toIgG. broad_peaks.**filtered**.broadPeak* -- target-only broad peaks that overlap with IgG-controlled broad peaks
+
+
+-   SEACR/
+
+SEACR peaks called with deduplicated IgG reads
+
+*sample_name.IgG.norm.stringent.bed* -- IgG normalized, stringent mode\*
+
+*sample_name.top01.stringent.bed* -- target only, top 1% signal
+
+*sample_name. IgG.norm.stringent.**filtered**.bed* -- IgG normalized peaks that overlap with target-only peaks
+
+
+$$\\[0.1in]$$
+
+
+#### [05_genome_coverage/](./05_genome_coverage/)
+
+*sample_name.target.markdup.bedgraph* -- unnormalized genome coverage for SEACR.
+
+*sample_name.target.markdup.CPM.bw* -- normalized genome coverage (CPM, count per million) for IGV.
+
+*sample_name.target.dedup.CPM.bw* -- normalized genome coverage (CPM, count per million) of deduplicated IgG reads for IGV.
+
+$$\\[0.1in]$$
+
+
+#### [07_consensus_peaks/](./07_consensus_peaks/)
+
+consensus peaks for each target by merging overlapping replicated peaks across sample groups
+
+
+$$\\[0.1in]$$
+
+
+
+
+
+
+## Methods
+
+(Tool references are provided as hyperlinks.)
+
+Read quality was examined using [FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/).
+Reads were aligned to the reference genome using [Bowtie2](https://www.nature.com/articles/nmeth.1923).
+Genome coverage profiles were generated using [bedtools genomecov](https://academic.oup.com/bioinformatics/article/26/6/841/244688).
+Both [MACS2](https://genomebiology.biomedcentral.com/articles/10.1186/gb-2008-9-9-r137) and [SEACR](https://doi.org/10.1186/s13072-019-0287-4) were used to call peaks from a sample.
+IgG reads were deduplicated using [GATK MarkDuplicates](http://dx.doi.org/10.1101/gr.107524.110).
+MACS2 was run in both target-only and IgG-controlled (using all IgG reads) modes.
+For narrow peaks used for TFs and some histone marks (e.g. H3K4me3), IgG-controlled peaks were kept for downstream analysis if they meet the following criteria: overlapping with treatment-only peaks, q-value \< 0.01 and enrichment \> 2. For broad peaks used for some histone marks (e.g. H3K27me3) and proteins targeting broad domains, target-only peaks were kept for downstream analysis if they meet the follow criteria: overlapping with IgG-controlled peaks, q-value \< 0.01 and enrichment \> 2.
+SEACR was run with IgG normalization (using deduplicated reads) and with top 1% of peaks reported, both in stringent mode. IgG-normalized peaks that overlap with top 1% of peaks were kept for further analysis.
+
+
+$$\\[0.5in]$$
+
+## Acknowledgement
+
+(For publication, please include the following acknowledgement) This research was supported by the Genomics & Bioinformatics Shared Resource of the Fred Hutch/University of Washington/Seattle Children's Cancer Consortium ([P30 CA015704](https://www.cancerconsortium.org/about.html)).
+
+$$\\[0.5in]$$
+
+##  {.unnumbered .unlisted}
+```{r exit_knit}
+knitr::knit_exit()
+```
+
+
+# Analyses {.unnumbered .unlisted}
+This workflow is modified from https://yezhengstat.github.io/CUTTag_tutorial/ and the main differences are the following: 
+- Implement part of nf-core workflow [cut&run 2.0](https://nf-co.re/cutandrun/2.0) from adpater trimming to alignment.
+- Call peaks with both MACS2 and SEACR.
+- Include more QC metrics and make QC plots scalable to a large number of samples.
+
+Get paths to fastq files as required by https://nf-co.re/cutandrun/2.0
+```{bash}
+./_cutandrun/bin/get_fq_path.sh <path/to/fastq/dir1/> [path/to/fastq/dir2/]
+```
+
+Set up sample sheet
+```{r setup_ss}
+## fq paths by running get_fq_path.sh
+fq <- read.csv(paste(wd, 'fq.csv', sep = '/')) %>% 
+  dplyr::filter(!grepl('^PC', seq.id)) %>% 
+  dplyr::rename("group" = "seq.id")
+
+meta <- xlsx::read.xlsx('CUT&RUN_Hejer_Nascent RNA Project.xlsx', sheetIndex = 1, endRow = 49) %>% 
+  dplyr::select(Sample_ID:Cell.Type) %>% 
+  dplyr::rename("group" = "Sample_ID", "sample_group" = "Sample.group.", "sample_replicate" = "Sample_Replicate", "control" = "Corresponding_control_ID", "target" = "Targets") %>% 
+  mutate(
+    sample_group = gsub('Group ', '', sample_group)
+  )
+
+setequal(fq$group, meta$group)
+setdiff(meta$control, meta$group)
+
+# create a sample sheet
+ss <- fq %>% 
+  left_join(
+    meta,
+    by = 'group'
+  ) %>% 
+  mutate( # for nf-core
+    replicate = 1,
+    control = ifelse(is.na(control), "", control),
+    target = ifelse(target %in% "RNPII PS5", 'RNAPolII_pS5', target),
+    peak_type = case_when(
+      target %in% c('H3K4me3','RNAPolII_pS5') ~ 'narrow', 
+      target %in% 'H3K27me3' ~ 'broad',
+      target %in% c('IgG', 'Input') ~ "",
+      TRUE ~ 'both'
+    )
+  ) %>% 
+  mutate(
+    is_control = ifelse(target %in% 'IgG', 1, 0),
+    control_replicate = ifelse(is_control == 1, "", 1),
+    sample_id = paste0(group, '_R1'),
+    control_id = ifelse(is_control == 0, paste0(control, '_R1'), ''),
+    id = group
+  ) %>% 
+      dplyr::relocate(group, replicate, fastq_1, fastq_2, control, control_replicate, peak_type, target, sample_group, sample_replicate, is_control, sample_id, control_id, id)
+
+ss %>% 
+  write.table('samples.csv', sep = ',', quote = F, row.names = F)
+
+
+```
+
+
+Run the analysis pipeline
+```{bash}
+## SLURM job IDs are saved in ./cutandrun.log
+bash _cutandrun/run_cnr.sh
+
+```
+
+## annotate consensus peaks
+```{bash}
+bash _cutandrun/bin/annotate_conp.sh params.json | tee -a cutandrun.log
+
+
+```
+
+```{r}
+## plot genomic distribution of consensus peaks ####
+## read HOMER annotation
+flist <- list.files(paste('Analysis/', '07_consensus_peaks/', sep = '/'), pattern = 'withAnnotation', full.names = T)
+
+ann_conp <- lapply(flist, function(fname){
+  read.delim(fname, header = T) %>%   
+    subset(!is.na(Annotation)) %>% 
+    mutate(
+      genomic.location = gsub(' .*', '', Annotation)
+    ) 
+  
+}); names(ann_conp) <- gsub('.withAnnotation.txt','',basename(flist))
+
+## make plots
+ss <- read.csv('samples.csv')
+targets <- sort(setdiff(unique(ss$target), 'IgG'))
+funcs <- readRDS('qc/funcs.rds')
+figs <- readRDS('qc/figs.rds')
+
+qc <- 'conp_ann'
+funcs[[qc]] <- function(df, plot.title = NULL){
+  require(dplyr)
+  require(ggplot2)
+  
+  df %>% 
+    ggplot(
+      aes(y = genomic.location)
+    )+
+    geom_bar()+
+    scale_x_continuous(expand = c(0,0))+
+    labs(x = 'Consensus peak count', y = '', title = plot.title)+
+    theme_bw()+
+    theme(
+      text = element_text(size = 8),
+      plot.title = element_text(size = 8)
+    )
+  
+}
+
+figs[[qc]] <- mapply(funcs[[qc]], ann_conp, names(ann_conp), SIMPLIFY = F)
+saveRDS(figs, 'qc/figs.rds')
+saveRDS(funcs, 'qc/funcs.rds')
+
+wrap_plots(lapply(
+  paste(rep(targets,each=3), c('stringent','narrow_peaks','broad_peaks'), sep = '.'),
+  function(id){
+    if(id %in% names(figs[[qc]])){
+      figs[[qc]][[id]]
+    }else{
+      plot_spacer()
+    }
+  }), ncol = 3)
+
+
+```
+
+# Deliver data
+```{bash}
+## 24.05.18
+user=acheng2; fc=240924_VH00699_547_AAFNJC5M5
+cd /fh/fast/_SR/Genomics/user/fwu/project/$user/$fc
+log=/fh/fast/_SR/Genomics/user/fwu/project/log/$user.$fc.log
+
+dst=/shared/ngs/illumina/$user/$fc/Analysis/
+[[ -d $dst ]] || mkdir -p $dst
+ls -ldh $dst
+dstgroup=$(ls -ldh $dst | cut -f 4 -d ' ')
+echo $dstgroup
+
+rsync -vaAXEWhrL --chown=solexa:$dstgroup --chmod=755 --no-compress --progress Analysis/ $dst/ | tee -a $log
+
+rsync -va --chown=solexa:$dstgroup --chmod=755 --no-compress --progress 240924_CUTandRUN.html $dst/ | tee -a $log
+
+subdir=02_alignment/bowtie2/yeast/
+rsync -vaAXEWhrL --chown=solexa:$dstgroup --chmod=755 --no-compress --progress Analysis/$subdir/ $dst/$subdir/ | tee -a $log
+
+
+```
+
