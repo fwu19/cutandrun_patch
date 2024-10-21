@@ -1,0 +1,23 @@
+{
+    "input": "/fh/fast/_SR/Genomics/user/fwu/project/_pipeline/nextflow/devel/cutandrun/samples.csv",
+    "indir": "/hpc/temp/_SR/Genomics/users/fwu/project/_pipeline/nextflow/devel/cutandrun/results/",
+    "outdir": "/hpc/temp/_SR/Genomics/users/fwu/project/_pipeline/nextflow/devel/cutandrun/Analysis",
+    "genome": "hg38",
+    "bt2Ref": "/shared/biodata/ngs/Reference/iGenomes/Homo_sapiens/NCBI/GRCh38/Sequence/Bowtie2Index/genome",
+    "genomeBed": "/fh/fast/_SR/Genomics/proj/fwu/datasets/hg38/genome/hg38.chrom.bed",
+    "blackList": "/fh/fast/_SR/Genomics/proj/fwu/datasets/hg38/genome/hg38-blacklist.v2.bed",
+    "genomeSize": "hs", 
+    "chromSize": "/fh/fast/_SR/Genomics/proj/fwu/datasets/hg38/genome/hg38.chrom.sizes",
+    "gtf4homer": "/fh/fast/_SR/Genomics/proj/fwu/datasets/hg38/genes/gencode.v38.annotation.proteinCoding_lncRNA.gtf", 
+    "gsize4homer": 3100000000,
+    "tss": "/fh/fast/_SR/Genomics/proj/fwu/datasets/hg38/genes/gencode.v38.annotation.proteinCoding_lncRNA.tss.bed",
+    "geneBed": "/fh/fast/_SR/Genomics/proj/fwu/datasets/hg38/genes/gencode.v38.annotation.proteinCoding_lncRNA.genes.bed",
+
+    "bt2RefEcoli": "/shared/ngs/illumina/henikoff/Bowtie2/Ecoli",
+    "genomeSpike": "yeast",
+    "bt2RefSpike": "/shared/ngs/illumina/henikoff/Bowtie2/yeast_masked_R64-1-1",
+    "keepdup": "all",
+
+    "minReplicates": 1
+  
+}
