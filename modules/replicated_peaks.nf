@@ -1,4 +1,6 @@
 process REPLICATED_PEAKS {
+    module = ['fhR/4.1.2-foss-2021b']
+
     label "process_single"
 
     tag "Generate replicated peaks and collect metrics"

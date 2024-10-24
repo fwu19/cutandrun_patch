@@ -1,4 +1,6 @@
 process READ_METRICS {
+    module = ['fhR/4.1.2-foss-2021b']
+
     label "process_single"
     tag "Collect reads QC"
 
