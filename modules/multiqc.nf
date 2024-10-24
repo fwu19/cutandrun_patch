@@ -6,7 +6,7 @@ process MULTIQC {
     tag "MultiQC on all samples"
 
     output:
-    path ('multiqc_data/*')
+    path ('multiqc_data/')
     path ('multiqc_report.html')
 
     script:
